@@ -1,0 +1,5 @@
+(library
+ (name tyck)
+ (libraries unix))
+
+(include_subdirs qualified)

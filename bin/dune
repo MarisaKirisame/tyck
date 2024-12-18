@@ -1,0 +1,9 @@
+(executable
+ (public_name tyck)
+ (name main)
+ (libraries tyck core))
+
+(env
+ (dev
+  (flags
+   (:standard -warn-error -A))))
