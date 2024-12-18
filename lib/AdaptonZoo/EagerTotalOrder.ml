@@ -64,14 +64,16 @@ module T = struct
     timestamp
 
   let unqueue meta = if PriorityQueue.remove eager_queue meta then incr Statistics.Counts.clean
-  let dequeue () = PriorityQueue.pop eager_queue
+
+  let dequeue () =
+    PriorityQueue.pop eager_queue
 
   let enqueue_dependents dependents =
     ignore
       (WeakBucket.fold
          (fun d () ->
-           if TotalOrder.is_valid d.start_timestamp then
-             if PriorityQueue.add eager_queue d then incr Statistics.Counts.dirty)
+           if TotalOrder.is_valid d.start_timestamp then (
+             if PriorityQueue.add eager_queue d then incr Statistics.Counts.dirty))
          dependents ());
     WeakBucket.clear dependents
 
@@ -235,12 +237,12 @@ struct
     m.meta.evaluate <- evaluate
 
   (* create memoizing constructors *)
-  include MemoN.Make (struct
-    type data = R.t
+  module Memo = MemoN.Make (struct
+    type data = R.t thunk
     type t = R.t thunk
 
     (** Create memoizing constructor for an EagerTotalOrder thunk. *)
-    let memo (type a) (module A : Hashtbl.SeededHashedType with type t = a) f =
+    let memo (type a) (module A : Hashtbl.SeededHashedType with type t = a) (f : (a -> data) -> a -> data) =
       let module Binding = struct
         type t = { key : A.t; mutable value : R.t thunk option }
 
@@ -268,7 +270,7 @@ struct
                 this prevents the GC from collecting binding from memotable until m itself is collected *)
             incr Statistics.Counts.create;
             incr Statistics.Counts.miss;
-            let m = thunk (fun () -> f memo x) in
+            let m = f memo x in
             m.meta.unmemo <- (fun () -> Memotable.remove memotable binding);
             binding.Binding.value <- Some m;
             m
@@ -276,6 +278,11 @@ struct
 
       memo
   end)
+
+  let memo = Memo.memo
+  let memo2 = Memo.memo2
+  let memo3 = Memo.memo3
+  let memo4 = Memo.memo4
 end
 
 (** Tweak GC for this module. *)

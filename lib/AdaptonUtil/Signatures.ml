@@ -27,7 +27,7 @@ module rec AType : sig
     val thunk : (unit -> data) -> t
     val update_thunk : t -> (unit -> data) -> unit
 
-    include MemoN.S with type data := data and type t := t
+    include MemoN.S with type data := t and type t := t
   end
 end =
   AType

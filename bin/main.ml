@@ -13,7 +13,7 @@ let time f s =
   fx
 
 let rec church n f x = if n <= 0 then x else church (n - 1) f (f x)
-let size = 100
+let size = 10000
 
 (*let _ = State.set_max_height_allowed State.t (size * 10)*)
 
@@ -136,6 +136,10 @@ module Demo45 = struct
   type pre_ty = Int | Prod of ty * ty | TypeError
   and ty = pre_ty thunk
 
+  (*Unfortunately, this code make Demo5 run in O(n^2) instead of O(1).
+    Note that this is slower than recomputing from scratch which is O(n).
+    The problem is that the AST edit propagate outward, causing a recursive recomputation.
+    Worse yet, the computation create new value, forcing more propagation*)
   let rec tyck (e : expr) (x_type : ty thunk) : ty thunk =
     let recur x = tyck x x_type in
     bind e (fun e ->
@@ -149,6 +153,27 @@ module Demo45 = struct
         (*This is where free propagation happens: note how an incremental is extracted from Prod and use as-is, without any change.*)
         | Zro x -> map (fun x -> bind x (fun x -> match x with Prod (x, _) -> x | _ -> const TypeError)) (recur x)
         | Fst y -> map (fun y -> bind y (fun y -> match y with Prod (_, y) -> y | _ -> const TypeError)) (recur y))
+
+  (*The fix is to memo the input, avoiding needless recomputation.
+    Alas, it is O(n) and not O(1) because we are returning new Incr.t,
+    suggesting that it need further propagation.
+    There are known solution - 
+    writing the incremental code manually, or using nominal adapton to suggest nothing changed.
+    Irregardless, this is a problem we need to deal with anyway,
+    and is orthogonal to free propagation, so I wont delve deeper.*)
+  let rec tyck (e : expr) (x_type : ty thunk) : ty thunk =
+    memo2
+      (fun recur e x_type ->
+        let recur x = recur x x_type in
+        bind e (fun e ->
+            match e with
+            | X -> x_type
+            | Lit _ -> const (const Int)
+            | Pair (x, y) -> map2 (fun x y -> const (Prod (x, y))) (recur x) (recur y)
+            | Zro x -> map (fun x -> bind x (fun x -> match x with Prod (x, _) -> x | _ -> const TypeError)) (recur x)
+            | Fst y -> map (fun y -> bind y (fun y -> match y with Prod (_, y) -> y | _ -> const TypeError)) (recur y)))            
+            
+      e x_type
 
   let expr_base = const X
   let expr = church size (fun x -> const (Zro x)) (church size (fun x -> const (Pair (x, const (Lit 0)))) expr_base)

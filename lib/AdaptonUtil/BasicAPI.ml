@@ -19,7 +19,7 @@ module Make (M : Signatures.AType) : sig
 
   val force : 'a athunk -> 'a
   val thunk : (unit -> 'a) -> 'a athunk
-  val memo : ('fn -> 'arg -> 'a) -> ('arg -> 'a athunk as 'fn)
+  val memo : ('fn -> 'arg -> 'a athunk) -> ('arg -> 'a athunk as 'fn)
 end = struct
   module P = PolyAPI.Make (M)
 

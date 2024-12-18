@@ -1,3 +1,4 @@
+(*
 (** Adapton lists. *)
 
 open AdaptonInternal
@@ -320,3 +321,4 @@ module Make (M : Signatures.AType) :
         (fun _ xs -> match force xs with `Cons _ -> force (RunType.AData.force (mergesort (lift xs))) | `Nil -> `Nil)
   end
 end
+*)

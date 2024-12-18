@@ -21,13 +21,21 @@ module type S = sig
   val update_const : 'a thunk -> 'a -> unit
   val thunk : ?hash:(int -> 'a -> int) -> ?equal:('a -> 'a -> bool) -> (unit -> 'a) -> 'a thunk
   val update_thunk : 'a thunk -> (unit -> 'a) -> unit
+  val return : ?hash:(int -> 'a -> int) -> ?equal:('a -> 'a -> bool) -> 'a -> 'a thunk
+  val map : ?hash:(int -> 'b -> int) -> ?equal:('b -> 'b -> bool) -> ('a -> 'b) -> 'a thunk -> 'b thunk
+
+  val map2 :
+    ?hash:(int -> 'c -> int) -> ?equal:('c -> 'c -> bool) -> ('a -> 'b -> 'c) -> 'a thunk -> 'b thunk -> 'c thunk
+
+  val join : ?hash:(int -> 'a -> int) -> ?equal:('a -> 'a -> bool) -> 'a thunk thunk -> 'a thunk
+  val bind : ?hash:(int -> 'b -> int) -> ?equal:('b -> 'b -> bool) -> 'a thunk -> ('a -> 'b thunk) -> 'b thunk
 
   val memo :
     ?inp_hash:(int -> 'inp -> int) ->
     ?inp_equal:('inp -> 'inp -> bool) ->
     ?hash:(int -> 'a -> int) ->
     ?equal:('a -> 'a -> bool) ->
-    ('memo -> 'inp -> 'a) ->
+    ('memo -> 'inp -> 'a thunk) ->
     ('inp -> 'a thunk as 'memo)
 
   val memo2 :
@@ -37,7 +45,7 @@ module type S = sig
     ?inp2_equal:('inp2 -> 'inp2 -> bool) ->
     ?hash:(int -> 'a -> int) ->
     ?equal:('a -> 'a -> bool) ->
-    ('memo -> 'inp1 -> 'inp2 -> 'a) ->
+    ('memo -> 'inp1 -> 'inp2 -> 'a thunk) ->
     ('inp1 -> 'inp2 -> 'a thunk as 'memo)
 
   val memo3 :
@@ -49,7 +57,7 @@ module type S = sig
     ?inp3_equal:('inp3 -> 'inp3 -> bool) ->
     ?hash:(int -> 'a -> int) ->
     ?equal:('a -> 'a -> bool) ->
-    ('memo -> 'inp1 -> 'inp2 -> 'inp3 -> 'a) ->
+    ('memo -> 'inp1 -> 'inp2 -> 'inp3 -> 'a thunk) ->
     ('inp1 -> 'inp2 -> 'inp3 -> 'a thunk as 'memo)
 
   val memo4 :
@@ -63,7 +71,7 @@ module type S = sig
     ?inp4_equal:('inp4 -> 'inp4 -> bool) ->
     ?hash:(int -> 'a -> int) ->
     ?equal:('a -> 'a -> bool) ->
-    ('memo -> 'inp1 -> 'inp2 -> 'inp3 -> 'inp4 -> 'a) ->
+    ('memo -> 'inp1 -> 'inp2 -> 'inp3 -> 'inp4 -> 'a thunk) ->
     ('inp1 -> 'inp2 -> 'inp3 -> 'inp4 -> 'a thunk as 'memo)
 
   val tweak_gc : unit -> unit
@@ -107,6 +115,7 @@ module Make (M : Signatures.AType) = struct
     end) in
     fun f -> (S.thunk f, (module S))
 
+  let update_thunk (type a) ((m, (module S)) : a thunk) f = S.update_thunk m f
   let return ?(hash = default_hash) ?(equal = default_equal) : 'a -> 'a thunk = const ~hash ~equal
 
   let map ?(hash = default_hash) ?(equal = default_equal) (f : 'a -> 'b) (x : 'a thunk) : 'b thunk =
@@ -122,10 +131,8 @@ module Make (M : Signatures.AType) = struct
   let bind ?(hash = default_hash) ?(equal = default_equal) (x : 'a thunk) (f : 'a -> 'b thunk) : 'b thunk =
     thunk ~hash ~equal (fun _ -> force (f (force x)))
 
-  let update_thunk (type a) ((m, (module S)) : a thunk) f = S.update_thunk m f
-
   let memo (type inp a) ?(inp_hash = default_hash) ?(inp_equal = default_equal) ?(hash = default_hash)
-      ?(equal = default_equal) : ('memo -> inp -> a) -> (inp -> a thunk as 'memo) =
+      ?(equal = default_equal) : ('memo -> inp -> a thunk) -> (inp -> a thunk as 'memo) =
     let module S = M.Make (struct
       type t = a
 
@@ -133,7 +140,7 @@ module Make (M : Signatures.AType) = struct
       let equal = equal
     end) in
     fun f ->
-      let f memo = f (fun a : a thunk -> (memo a, (module S))) in
+      let f memo a = fst (f (fun a -> (memo a, (module S))) a) in
       let memo =
         S.memo
           (module struct
@@ -144,11 +151,12 @@ module Make (M : Signatures.AType) = struct
           end)
           f
       in
+
       fun a -> (memo a, (module S))
 
   let memo2 (type inp1 inp2 a) ?(inp1_hash = default_hash) ?(inp1_equal = default_equal) ?(inp2_hash = default_hash)
       ?(inp2_equal = default_equal) ?(hash = default_hash) ?(equal = default_equal) :
-      ('memo2 -> inp1 -> inp2 -> a) -> (inp1 -> inp2 -> a thunk as 'memo2) =
+      ('memo2 -> inp1 -> inp2 -> a thunk) -> (inp1 -> inp2 -> a thunk as 'memo2) =
     let module S = M.Make (struct
       type t = a
 
@@ -156,7 +164,7 @@ module Make (M : Signatures.AType) = struct
       let equal = equal
     end) in
     fun f ->
-      let f memo2 = f (fun a b : a thunk -> (memo2 a b, (module S))) in
+      let f memo2 a b = fst (f (fun a b -> (memo2 a b, (module S))) a b) in
       let memo2 =
         S.memo2
           (module struct
@@ -178,7 +186,7 @@ module Make (M : Signatures.AType) = struct
   let memo3 (type inp1 inp2 inp3 a) ?(inp1_hash = default_hash) ?(inp1_equal = default_equal)
       ?(inp2_hash = default_hash) ?(inp2_equal = default_equal) ?(inp3_hash = default_hash)
       ?(inp3_equal = default_equal) ?(hash = default_hash) ?(equal = default_equal) :
-      ('memo3 -> inp1 -> inp2 -> inp3 -> a) -> (inp1 -> inp2 -> inp3 -> a thunk as 'memo3) =
+      ('memo3 -> inp1 -> inp2 -> inp3 -> a thunk) -> (inp1 -> inp2 -> inp3 -> a thunk as 'memo3) =
     let module S = M.Make (struct
       type t = a
 
@@ -186,7 +194,7 @@ module Make (M : Signatures.AType) = struct
       let equal = equal
     end) in
     fun f ->
-      let f memo3 = f (fun a b c : a thunk -> (memo3 a b c, (module S))) in
+      let f memo3 a b c = fst (f (fun a b c -> (memo3 a b c, (module S))) a b c) in
       let memo3 =
         S.memo3
           (module struct
@@ -215,7 +223,7 @@ module Make (M : Signatures.AType) = struct
       ?(inp2_hash = default_hash) ?(inp2_equal = default_equal) ?(inp3_hash = default_hash)
       ?(inp3_equal = default_equal) ?(inp4_hash = default_hash) ?(inp4_equal = default_equal) ?(hash = default_hash)
       ?(equal = default_equal) :
-      ('memo4 -> inp1 -> inp2 -> inp3 -> inp4 -> a) -> (inp1 -> inp2 -> inp3 -> inp4 -> a thunk as 'memo4) =
+      ('memo4 -> inp1 -> inp2 -> inp3 -> inp4 -> a thunk) -> (inp1 -> inp2 -> inp3 -> inp4 -> a thunk as 'memo4) =
     let module S = M.Make (struct
       type t = a
 
@@ -223,7 +231,7 @@ module Make (M : Signatures.AType) = struct
       let equal = equal
     end) in
     fun f ->
-      let f memo4 = f (fun a b c d : a thunk -> (memo4 a b c d, (module S))) in
+      let f memo4 a b c d = fst (f (fun a b c d : a thunk -> (memo4 a b c d, (module S))) a b c d) in
       let memo4 =
         S.memo4
           (module struct

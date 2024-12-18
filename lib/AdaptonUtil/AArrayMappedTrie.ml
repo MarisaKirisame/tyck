@@ -1,5 +1,5 @@
+(*
 (** Adapton array mapped tries. *)
-
 open AdaptonInternal
 
 (**/**) (* helper parameters *)
@@ -98,6 +98,7 @@ module Make (M : Signatures.AType) :
 
     include T
 
+
     (** An empty Adapton array mapped trie. *)
     let empty = A.const Empty
 
@@ -139,3 +140,4 @@ module Make (M : Signatures.AType) :
         add xs k v
   end
 end
+*)

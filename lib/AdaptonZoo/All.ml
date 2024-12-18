@@ -5,12 +5,12 @@ open AdaptonUtil
 (** List of all incremental computation modules. *)
 let a_list =
   [
-    ("Adapton", (module Adapton : Signatures.AType));
-    ("EagerTotalOrder", (module EagerTotalOrder : Signatures.AType));
-    ("EagerNonInc", (module EagerNonInc : Signatures.AType));
-    ("LazyNonInc", (module LazyNonInc : Signatures.AType));
+    (*("Adapton", (module Adapton : Signatures.AType));*)
+    ("EagerTotalOrder", (module EagerTotalOrder : Signatures.AType))
+    (*("EagerNonInc", (module EagerNonInc : Signatures.AType));*)
+    (*("LazyNonInc", (module LazyNonInc : Signatures.AType));*);
   ]
-
+(*
 (** List of all incremental list modules. *)
 let alist_list =
   List.map
@@ -25,3 +25,4 @@ let aamt_list =
       ( "AArrayMappedTrie (" ^ name ^ ")",
         (module AArrayMappedTrie.Make ((val atype : Signatures.AType)) : Signatures.AArrayMappedTrieType) ))
     a_list
+*)
